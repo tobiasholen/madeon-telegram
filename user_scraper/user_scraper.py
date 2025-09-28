@@ -10,13 +10,18 @@ class TelegramUserScraper:
         self.db_handler = MongoDBHandler(mongo_uri, database_name, collection_name)
         self.client = TelegramClient(phone, api_id, api_hash)
 
-
     def start(self):
         self.client.connect()
         if not self.client.is_user_authorized():
             self.client.send_code_request(self.phone)
             self.client.sign_in(self.phone, input('Enter the OTP: '))
-    
+ 
+    def stop(self):
+        self.client.disconnect()
+        print("Client disconnected")
+        self.db_handler.close_connection()
+        print("Database disconnected")    
+
     def _get_available_groups(self):
         groups_list = []
         group = {}
@@ -94,13 +99,3 @@ class TelegramUserScraper:
         all_participants = self.client.get_participants(target_group["title"])
 
         self._save_users_to_db(all_participants, target_group)
-
-
-
-    def stop(self):
-        self.client.disconnect()
-        print("Client disconnected")
-        self.db_handler.close_connection()
-        print("Database disconnected")
-
-

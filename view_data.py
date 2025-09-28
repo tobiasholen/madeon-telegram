@@ -26,8 +26,10 @@ def main():
         print("2. View users by group")
         print("3. View statistics")
         print("4. Export to CSV")
+        print("5. View contacted users")
+        print("6. View non-contacted users")
         
-        choice = input("\nEnter your choice (1-4): ")
+        choice = input("\nEnter your choice (1-6): ")
         
         if choice == "1":
             view_all_users(db_handler)
@@ -37,6 +39,10 @@ def main():
             view_statistics(db_handler)
         elif choice == "4":
             export_to_csv(db_handler)
+        elif choice == "5":
+            view_contacted_users(db_handler)
+        elif choice == "6":
+            view_non_contacted_users(db_handler)
         else:
             print("Invalid choice!")
             
@@ -113,16 +119,29 @@ def view_statistics(db_handler):
     # Users with phone numbers
     users_with_phone = db_handler.collection.count_documents({"phone": {"$ne": ""}})
     
+    # Contact statistics
+    contacted_users = db_handler.collection.count_documents({"is_contacted": True})
+    non_contacted_users = db_handler.collection.count_documents({
+        "$or": [{"is_contacted": {"$exists": False}}, {"is_contacted": False}]
+    })
+    
     # Recent scraping activity (last 24 hours)
     from datetime import datetime, timedelta
     yesterday = datetime.utcnow() - timedelta(days=1)
     recent_users = db_handler.collection.count_documents({"scraped_at": {"$gte": yesterday}})
+    recent_contacted = db_handler.collection.count_documents({"contacted_at": {"$gte": yesterday}})
     
     print("\n=== Database Statistics ===")
     print(f"Total Users: {total_users}")
     print(f"Users with Phone Numbers: {users_with_phone}")
     print(f"Users Scraped (Last 24h): {recent_users}")
     print(f"Total Groups: {len(group_stats)}")
+    
+    print(f"\n=== Contact Statistics ===")
+    print(f"Contacted Users: {contacted_users}")
+    print(f"Non-Contacted Users: {non_contacted_users}")
+    print(f"Contact Rate: {(contacted_users/total_users*100):.1f}%" if total_users > 0 else "Contact Rate: 0%")
+    print(f"Recently Contacted (Last 24h): {recent_contacted}")
     
     print(f"\n=== Top Groups by User Count ===")
     for group in group_stats[:10]:  # Top 10 groups
@@ -163,6 +182,42 @@ def export_to_csv(db_handler):
         
     except Exception as e:
         print(f"Error exporting to CSV: {e}")
+
+def view_contacted_users(db_handler):
+    """Display users who have been contacted"""
+    contacted_users = list(db_handler.collection.find({"is_contacted": True}))
+    
+    if not contacted_users:
+        print("No contacted users found in the database.")
+        return
+    
+    print(f"\n=== Contacted Users ({len(contacted_users)} total) ===")
+    for i, user in enumerate(contacted_users, 1):
+        print(f"{i}. Username: {user.get('username', 'N/A')}")
+        print(f"   Name: {user.get('first_name', '')} {user.get('last_name', '')}")
+        print(f"   Group: {user.get('group', 'N/A')}")
+        print(f"   Contacted at: {user.get('contacted_at', 'N/A')}")
+        print(f"   Contacted by: {user.get('contacted_by', 'N/A')}")
+        print(f"   Message sent: {user.get('message_sent', 'N/A')[:100]}...")  # First 100 chars
+        print("-" * 50)
+
+def view_non_contacted_users(db_handler):
+    """Display users who haven't been contacted yet"""
+    non_contacted_users = db_handler.get_non_contacted_users()
+    
+    if not non_contacted_users:
+        print("No non-contacted users found in the database.")
+        return
+    
+    print(f"\n=== Non-Contacted Users ({len(non_contacted_users)} total) ===")
+    for i, user in enumerate(non_contacted_users, 1):
+        print(f"{i}. Username: {user.get('username', 'N/A')}")
+        print(f"   Name: {user.get('first_name', '')} {user.get('last_name', '')}")
+        print(f"   Phone: {user.get('phone', 'N/A')}")
+        print(f"   Group: {user.get('group', 'N/A')}")
+        print(f"   User ID: {user.get('user_id', 'N/A')}")
+        print(f"   Scraped: {user.get('scraped_at', 'N/A')}")
+        print("-" * 50)
 
 if __name__ == "__main__":
     main()

@@ -1,9 +1,9 @@
 from dotenv import load_dotenv
 import os
-from telethon import TelegramClient, sync
+from messager.messager import TelegramMessager
 from user_scraper.user_scraper import TelegramUserScraper
 
-def main():
+def get_environment():
     load_dotenv()
 
     # Validate required environment variables
@@ -29,6 +29,31 @@ def main():
     mongo_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
     database_name = os.getenv('MONGODB_DATABASE', 'telegram_scraper')
     collection_name = os.getenv('MONGODB_COLLECTION', 'scraped_users')
+    return api_id, api_hash, phone, mongo_uri, database_name, collection_name
+
+def contact_users():
+    api_id, api_hash, phone, mongo_uri, database_name, collection_name = get_environment()
+    messager = TelegramMessager(
+        api_id=api_id, 
+        api_hash=api_hash, 
+        phone=phone, 
+        mongo_uri=mongo_uri, 
+        database_name=database_name, 
+        collection_name=collection_name,
+        contacted_by=phone
+    )
+    
+    try:
+        messager.start()
+        messager.send_opener_message_to_non_contacted_users()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        messager.stop()
+
+
+def scrape_users():
+    api_id, api_hash, phone, mongo_uri, database_name, collection_name = get_environment()
 
     scraper = TelegramUserScraper(api_id, api_hash, phone, mongo_uri, database_name, collection_name)
     try:
@@ -42,7 +67,7 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        scrape_users()
     except EnvironmentError as e:
         print(f"Configuration Error: {e}")
         exit(1)

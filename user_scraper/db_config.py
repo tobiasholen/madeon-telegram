@@ -92,6 +92,67 @@ class MongoDBHandler:
             print(f"Error retrieving all users: {e}")
             return []
 
+    def update_user_contacted(self, user_id, group_id, message_sent, contacted_by, force_update=False):
+        """Update user record when they have been contacted"""
+        try:
+            filter_dict = {
+                'user_id': user_id,
+                'group_id': group_id
+            }
+            
+            # Check if user is already contacted (unless forcing update)
+            if not force_update:
+                existing_user = self.collection.find_one(filter_dict)
+                if existing_user and existing_user.get('is_contacted'):
+                    print(f"User {user_id} has already been contacted. Use force_update=True to override.")
+                    return False
+            
+            update_data = {
+                'is_contacted': True,
+                'contacted_at': datetime.utcnow(),
+                'message_sent': message_sent,
+                'contacted_by': contacted_by
+            }
+            
+            # If this is a re-contact, store previous contact info
+            if force_update:
+                existing_user = self.collection.find_one(filter_dict)
+                if existing_user and existing_user.get('is_contacted'):
+                    update_data['previous_contact'] = {
+                        'contacted_at': existing_user.get('contacted_at'),
+                        'message_sent': existing_user.get('message_sent'),
+                        'contacted_by': existing_user.get('contacted_by')
+                    }
+            
+            result = self.collection.update_one(
+                filter_dict,
+                {'$set': update_data}
+            )
+            
+            if result.modified_count > 0:
+                print(f"Updated contact status for user_id: {user_id}")
+                return True
+            else:
+                print(f"No user found to update with user_id: {user_id} and group_id: {group_id}")
+                return False
+                
+        except Exception as e:
+            print(f"Error updating user contact status: {e}")
+            return False
+
+    def get_non_contacted_users(self, group_id=None):
+        """Retrieve users who haven't been contacted yet"""
+        try:
+            filter_dict = {'$or': [{'is_contacted': {'$exists': False}}, {'is_contacted': False}]}
+            
+            if group_id:
+                filter_dict['group_id'] = group_id
+                
+            return list(self.collection.find(filter_dict))
+        except Exception as e:
+            print(f"Error retrieving non-contacted users: {e}")
+            return []
+
     def close_connection(self):
         """Close the MongoDB connection"""
         if self.client:
