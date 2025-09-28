@@ -6,7 +6,7 @@ This script allows you to view and query the scraped users from MongoDB
 
 from dotenv import load_dotenv
 import os
-from db_config import MongoDBHandler
+from user_scraper.db_config import MongoDBHandler
 
 def main():
     # Load environment variables
