@@ -1,6 +1,11 @@
 # Required Python Version
 3.11
 
+# Start dev environemnt
+```sh
+docker-compose up -d
+```
+
 # Telegram Credentials
 api_id: 22982684
 app_hash: 97897b3b94d1b0901311731708208a4b

@@ -1,0 +1,27 @@
+name: "telegram-scrapper"
+
+services:
+  telegram-scrapper-mongodb:
+    image: mongo:7-jammy
+    container_name: telegram-scrapper-mongodb
+    environment:
+      MONGO_INITDB_DATABASE: telegram
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - telegram_scraper_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb_data:
+    driver: local
+networks:
+  telegram_scraper_network:
+    driver: bridge

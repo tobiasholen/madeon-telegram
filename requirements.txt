@@ -4,3 +4,4 @@ pyasn1==0.4.8
 python-dotenv==0.10.5
 rsa==4.7
 Telethon==1.41.2
+pymongo==4.5.0

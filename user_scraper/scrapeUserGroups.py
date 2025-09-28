@@ -1,16 +1,38 @@
 from telethon import TelegramClient, sync
 from dotenv import load_dotenv
 import os
-import csv
+from db_config import MongoDBHandler
 
 def main():
     # Get ENV variables from the '.env' file
     load_dotenv()
+    
+    # Validate required environment variables
+    required_vars = ['API_ID', 'API_HASH', 'PHONE']
+    missing_vars = []
+    
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        raise EnvironmentError(
+            f"Missing required environment variables: {', '.join(missing_vars)}\n"
+            f"Please copy '.env.example' to '.env' and fill in your credentials."
+        )
+    
+    # Get Telegram API credentials
     api_id = os.getenv('API_ID')
     api_hash = os.getenv('API_HASH')
     phone = os.getenv('PHONE')
-    fileName = input("Enter the File Name: ")
-    fileName = fileName + '.csv'
+    
+    # Get MongoDB configuration
+    mongo_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
+    database_name = os.getenv('MONGODB_DATABASE', 'telegram_scraper')
+    collection_name = os.getenv('MONGODB_COLLECTION', 'scraped_users')
+    
+    # Initialize MongoDB connection
+    db_handler = MongoDBHandler(mongo_uri, database_name, collection_name)
 
     client = TelegramClient(phone, api_id, api_hash)
 
@@ -34,77 +56,50 @@ def main():
         except:
             continue
 
-    # Create a CSV file
-    with open(fileName, mode="w",encoding='UTF-8') as f:
-            writer = csv.writer(f,delimiter=",",lineterminator="\n")
-            writer.writerow(['username', 'first_name', 'last_name', 'phone','group', 'user_id', 'group_id'])
+    # Extract Users from the Group and save to MongoDB
+    try:
+        total_users_processed = 0
+        for group_name in groups_list:
+            # Iterates over List of Dictionaries to extract Users
+            target_group = group_name
+            all_participants = []
+            all_participants = client.get_participants(target_group["title"])
 
-    # Extract Users from the Group
-    for group_name in groups_list:
-        # Iterates over List of Dictionaries to extract Users
-        # Output CSV file has:- username, first_name, last_name, phone, group, user_id, group_id
+            print('Fetching Members from {}\nSaving to MongoDB'.format(target_group["title"]))
 
-        target_group = group_name
-        all_participants = []
-        all_participants = client.get_participants(target_group["title"])
-
-        print('Fetching Members from {}\nWriting to the file'.format(target_group["title"]))
-
-        with open(fileName, mode="a", encoding='UTF-8') as f:
-            writer = csv.writer(f, delimiter=",", lineterminator="\n")
+            users_batch = []
             for user in all_participants:
-                if user.username:
-                    username = user.username
-                else:
-                    username = ""
-                if user.first_name:
-                    first_name = user.first_name
-                else:
-                    first_name = ""
-                if user.last_name:
-                    last_name = user.last_name
-                else:
-                    last_name = ""
-                if user.phone:
-                    phone = user.phone
-                else:
-                    phone = ""
-                if user.id:
-                    user_id = user.id
-                else:
-                    user_id = ""
-                if target_group["title"]:
-                    group = target_group["title"]
-                else:
-                    group = ""
-                if target_group["id"]:
-                    group_id = target_group["id"]
-                else:
-                    group_id = ""
-                writer.writerow([username, first_name, last_name, phone, group, user_id, group_id])      
+                user_data = {
+                    'username': user.username if user.username else "",
+                    'first_name': user.first_name if user.first_name else "",
+                    'last_name': user.last_name if user.last_name else "",
+                    'phone': user.phone if user.phone else "",
+                    'user_id': user.id if user.id else "",
+                    'group': target_group["title"] if target_group["title"] else "",
+                    'group_id': target_group["id"] if target_group["id"] else ""
+                }
+                users_batch.append(user_data)
+            
+            # Save batch to MongoDB
+            if users_batch:
+                db_handler.insert_users_batch(users_batch)
+                total_users_processed += len(users_batch)
 
-    print('All Group Members are scraped successfully.')
-    
-# Generates '.env' File in the project Directory
-def generateENV():
-    print("Generating ENV File")
-    envData = []
-    dataName = ['API_ID', 'API_HASH', 'PHONE']
-    print("Enter the Required Credentials:")
-    index = 0
-    for i in dataName:
-        data = input('{}: '.format(i))
-        envData.append(data)
-    with open(".env", mode="w",encoding='UTF-8') as f:
-        for index in range(len(envData)):
-            f.write('{0} = \'{1}\'\n'.format(dataName[index], envData[index]))
-    return
+        print(f'All Group Members are scraped successfully. Total users processed: {total_users_processed}')
+        
+    except Exception as e:
+        print(f'Error during scraping: {e}')
+    finally:
+        # Close database connection
+        db_handler.close_connection()
 
 if __name__ == "__main__":
-    print("Checking .env file")
-    if os.path.isfile('.env'):
+    try:
         main()
-    else:
-        generateENV()
-        main()
+    except EnvironmentError as e:
+        print(f"Configuration Error: {e}")
+        exit(1)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)
         
